@@ -25,8 +25,9 @@ h1{font-size:24px;margin:0 0 6px}
 }
 .filebox{
   border:2px dashed #b8c4d3; border-radius:12px; padding:24px 15px;
-  text-align:center; background:#fafcff
+  text-align:center; background:#fafcff; transition:.18s ease
 }
+.filebox.dragover{border-color:#1264d1;background:#eef6ff;transform:scale(1.01)}
 input[type=file]{display:none}
 .pick{
   display:inline-block; background:var(--blue); color:#fff; padding:12px 20px;
@@ -215,8 +216,10 @@ body.pdf-mode .pdf-help{
   <p class="lead">ARNetのPDFから「居住中」だけを拾い、管理番号・物件名・号数を一覧にします。</p>
 
   <div class="panel upload-panel">
-    <div class="filebox">
-      <label class="pick" for="pdfFile">PDFを選択</label>
+    <div class="filebox" id="dropZone">
+      <div style="font-weight:800;margin-bottom:10px">PDFをここにドラッグ＆ドロップ</div>
+<div style="font-size:12px;color:#777;margin-bottom:10px">または</div>
+<label class="pick" for="pdfFile">PDFを選択</label>
       <input id="pdfFile" type="file" accept=".pdf,application/pdf">
       <div id="filename">PDF未選択</div>
       <div id="status"></div>
@@ -282,7 +285,26 @@ let rows = [];
 
 fileInput.addEventListener("change", async () => {
   const file = fileInput.files?.[0];
+  if(file) await processFile(file);
+});
+
+const dropZone = document.getElementById("dropZone");
+["dragenter","dragover"].forEach(t=>dropZone.addEventListener(t,e=>{
+  e.preventDefault(); e.stopPropagation(); dropZone.classList.add("dragover");
+}));
+["dragleave","drop"].forEach(t=>dropZone.addEventListener(t,e=>{
+  e.preventDefault(); e.stopPropagation(); dropZone.classList.remove("dragover");
+}));
+dropZone.addEventListener("drop", async e=>{
+  const file=e.dataTransfer?.files?.[0];
   if(!file) return;
+  if(file.type!=="application/pdf" && !file.name.toLowerCase().endsWith(".pdf")){
+    setStatus("PDFファイルを入れてください。",true); return;
+  }
+  await processFile(file);
+});
+
+async function processFile(file){
 
   filenameEl.textContent = file.name;
   setStatus("PDFを解析中…");
@@ -330,7 +352,7 @@ fileInput.addEventListener("change", async () => {
     render();
     setStatus("PDFの解析に失敗しました。", true);
   }
-});
+}
 
 function extractByPosition(items, pageWidth){
   const out = [];
@@ -570,8 +592,12 @@ function buildPrintReport(){
   });
 
   const d = new Date();
-  meta.textContent =
-    `作成日：${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}　件数：${rows.length}件`;
+  d.setDate(d.getDate() - 1);
+  const yyyy=d.getFullYear();
+  const mm=String(d.getMonth()+1).padStart(2,"0");
+  const dd=String(d.getDate()).padStart(2,"0");
+  meta.textContent = `対象日：${yyyy}/${mm}/${dd}　件数：${rows.length}件`;
+  document.title = `ARNet_居住中物件一覧_${Number(mm)}.${Number(dd)}`;
 }
 
 document.getElementById("pdfBackBtn").addEventListener("click",()=>{

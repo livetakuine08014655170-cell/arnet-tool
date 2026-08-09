@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ARNet 居住中物件抽出</title>
+
+<style>
+:root{
+  --bg:#f4f6f8; --card:#fff; --text:#222; --sub:#6b7280;
+  --line:#d7dde5; --blue:#1264d1; --green:#198754; --greenbg:#eaf8f0;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Yu Gothic","YuGothic",Meiryo,sans-serif;
+  background:var(--bg); color:var(--text);
+}
+.wrap{width:min(920px,100%);margin:auto;padding:20px 14px 40px}
+h1{font-size:24px;margin:0 0 6px}
+.lead{font-size:14px;color:var(--sub);line-height:1.7;margin:0 0 16px}
+.panel{
+  background:var(--card); border:1px solid var(--line); border-radius:14px;
+  padding:16px; margin-bottom:16px; box-shadow:0 3px 14px rgba(0,0,0,.04)
+}
+.filebox{
+  border:2px dashed #b8c4d3; border-radius:12px; padding:24px 15px;
+  text-align:center; background:#fafcff
+}
+input[type=file]{display:none}
+.pick{
+  display:inline-block; background:var(--blue); color:#fff; padding:12px 20px;
+  border-radius:9px; font-weight:800; cursor:pointer
+}
+#filename{margin-top:10px;color:var(--sub);font-size:13px}
+#status{margin-top:10px;min-height:21px;font-weight:800}
+.error{color:#b42318}
+.summary{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px}
+.count{font-size:19px;font-weight:900}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{
+  border:0;border-radius:8px;padding:10px 14px;font-weight:800;cursor:pointer
+}
+.btn-print{background:#222;color:#fff}
+.btn-clear{background:#e8edf3;color:#333}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th,td{padding:12px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{background:#f7f9fb;font-size:13px;white-space:nowrap}
+td{font-size:14px}
+.copy-btn{
+  min-width:116px;border:1px solid #bdd0e9;background:#eef6ff;color:#0b55aa;
+  border-radius:8px;padding:8px 10px;font-weight:900;cursor:pointer;white-space:nowrap
+}
+.copy-btn.copied{background:var(--green);border-color:var(--green);color:#fff}
+.empty{text-align:center;color:#777;padding:28px}
+.note{font-size:12px;line-height:1.7;color:#777;margin-top:12px}
+.print-title{display:none}
+
+@media(max-width:640px){
+  .wrap{padding:12px 10px 30px}
+  h1{font-size:20px}
+  .panel{padding:12px}
+  .summary{align-items:flex-start;flex-direction:column}
+  th,td{padding:10px 7px;font-size:13px}
+  .copy-btn{min-width:104px}
+}
+@media print{
+  @page{
+    size:A4 landscape;
+    margin:8mm;
+  }
+
+  html,body{
+    width:auto !important;
+    height:auto !important;
+    margin:0 !important;
+    padding:0 !important;
+    background:#fff !important;
+    overflow:visible !important;
+  }
+
+  body *{
+    visibility:hidden !important;
+  }
+
+  #printOnlyReport,
+  #printOnlyReport *{
+    visibility:visible !important;
+  }
+
+  #printOnlyReport{
+    display:block !important;
+    position:absolute !important;
+    left:0 !important;
+    top:0 !important;
+    width:100% !important;
+    margin:0 !important;
+    padding:0 !important;
+    background:#fff !important;
+  }
+
+  #printOnlyReport h2{
+    margin:0 0 4mm !important;
+    font-size:16pt !important;
+  }
+
+  .print-only-meta{
+    margin-bottom:3mm !important;
+    font-size:9pt !important;
+    color:#444 !important;
+  }
+
+  .print-only-table{
+    width:100% !important;
+    border-collapse:collapse !important;
+    table-layout:fixed !important;
+  }
+
+  .print-only-table th,
+  .print-only-table td{
+    border:1px solid #666 !important;
+    padding:2.2mm 2mm !important;
+    font-size:8.5pt !important;
+    line-height:1.25 !important;
+    vertical-align:middle !important;
+    word-break:break-word !important;
+    background:#fff !important;
+  }
+
+  .print-only-table th{
+    background:#eee !important;
+    -webkit-print-color-adjust:exact !important;
+    print-color-adjust:exact !important;
+  }
+
+  .print-only-table th:nth-child(1),
+  .print-only-table td:nth-child(1){width:17% !important;}
+
+  .print-only-table th:nth-child(2),
+  .print-only-table td:nth-child(2){width:29% !important;}
+
+  .print-only-table th:nth-child(3),
+  .print-only-table td:nth-child(3){width:10% !important;}
+
+  .print-only-table th:nth-child(4),
+  .print-only-table td:nth-child(4){width:22% !important;}
+
+  .print-only-table th:nth-child(5),
+  .print-only-table td:nth-child(5){width:22% !important;}
+
+  tr{
+    break-inside:avoid !important;
+    page-break-inside:avoid !important;
+  }
+}
+
+body.pdf-mode{
+  background:#fff;
+}
+body.pdf-mode .upload-panel,
+body.pdf-mode .lead,
+body.pdf-mode > .wrap > h1,
+body.pdf-mode .actions,
+body.pdf-mode .note{
+  display:none !important;
+}
+body.pdf-mode .panel{
+  border:0;
+  box-shadow:none;
+  padding:0;
+}
+body.pdf-mode .print-title{
+  display:block;
+}
+body.pdf-mode .pdf-help{
+  display:block;
+}
+.pdf-help{
+  display:none;
+  margin:0 0 14px;
+  padding:14px 16px;
+  border:2px solid #222;
+  border-radius:10px;
+  background:#fff9d9;
+  font-weight:800;
+  line-height:1.7;
+}
+.pdf-help .small{
+  display:block;
+  font-size:13px;
+  font-weight:500;
+  margin-top:4px;
+}
+.pdf-back{
+  display:inline-block;
+  margin-top:10px;
+  border:0;
+  border-radius:8px;
+  padding:9px 13px;
+  background:#e8edf3;
+  color:#222;
+  font-weight:800;
+  cursor:pointer;
+}
+
+
+.print-only-report{display:none}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+  <h1>ARNet 居住中物件抽出</h1>
+  <p class="lead">ARNetのPDFから「居住中」だけを拾い、管理番号・物件名・号数を一覧にします。</p>
+
+  <div class="panel upload-panel">
+    <div class="filebox">
+      <label class="pick" for="pdfFile">PDFを選択</label>
+      <input id="pdfFile" type="file" accept=".pdf,application/pdf">
+      <div id="filename">PDF未選択</div>
+      <div id="status"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="pdf-help">
+      PDF用の一覧だけに絞りました。キーボードの <strong>Ctrl + P</strong> を押してください。
+      <span class="small">印刷画面で「PDFに保存」を選べば、コピー済み表示もそのまま残ります。</span>
+      <button class="pdf-back" id="pdfBackBtn" type="button">通常画面に戻る</button>
+    </div>
+    <div class="print-title">
+      <h2>ARNet 居住中物件一覧</h2>
+      <div class="print-meta" id="printMeta"></div>
+    </div>
+
+    <div class="summary">
+      <div class="count">居住中：<span id="count">0</span>件</div>
+      <div class="actions">
+        <button class="btn btn-clear" id="clearBtn">リセット</button>
+        <button class="btn btn-print" id="pdfModeBtn" type="button">PDF用表示にする</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>管理番号</th>
+            <th>物件名</th>
+            <th>号数</th>
+            <th>管理番号コピー</th>
+            <th>物件名コピー</th>
+          </tr>
+        </thead>
+        <tbody id="resultBody">
+          <tr><td colspan="5" class="empty">PDFを選択してください</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      ※ この版はARNet帳票の「列位置」を使って抽出します。文字の並び順に依存しないので前版より安定します。<br>
+      ※ 「一覧をPDF保存」→ 印刷画面で「PDFに保存」を選択してください。
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
+
+const fileInput = document.getElementById("pdfFile");
+const filenameEl = document.getElementById("filename");
+const statusEl = document.getElementById("status");
+const bodyEl = document.getElementById("resultBody");
+const countEl = document.getElementById("count");
+const printMetaEl = document.getElementById("printMeta");
+
+let rows = [];
+
+fileInput.addEventListener("change", async () => {
+  const file = fileInput.files?.[0];
+  if(!file) return;
+
+  filenameEl.textContent = file.name;
+  setStatus("PDFを解析中…");
+  rows = [];
+  render();
+
+  try{
+    const data = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data}).promise;
+    const found = [];
+
+    for(let pageNo=1; pageNo<=pdf.numPages; pageNo++){
+      setStatus(`PDFを解析中… ${pageNo}/${pdf.numPages}ページ`);
+      const page = await pdf.getPage(pageNo);
+      const viewport = page.getViewport({scale:1});
+      const content = await page.getTextContent();
+
+      const items = content.items
+        .map(it => {
+          const t = pdfjsLib.Util.transform(viewport.transform, it.transform);
+          return {
+            text:String(it.str || "").trim(),
+            x:t[4],
+            y:t[5],
+            w:Math.abs(it.width || 0),
+            h:Math.abs(it.height || 0)
+          };
+        })
+        .filter(o => o.text);
+
+      found.push(...extractByPosition(items, viewport.width));
+    }
+
+    rows = dedupe(found);
+
+    if(rows.length){
+      setStatus(`抽出完了：居住中 ${rows.length}件`);
+    }else{
+      setStatus("「居住中」を検出できませんでした。", true);
+    }
+    render();
+  }catch(err){
+    console.error(err);
+    rows = [];
+    render();
+    setStatus("PDFの解析に失敗しました。", true);
+  }
+});
+
+function extractByPosition(items, pageWidth){
+  const out = [];
+
+  // ARNet帳票は横長。列位置をページ幅に対する比率で扱う
+  const col = {
+    no:   [0.035, 0.090],
+    name: [0.090, 0.185],
+    room: [0.185, 0.218],
+    state:[0.218, 0.260]
+  };
+
+  const occupied = items.filter(i => normalize(i.text).includes("居住中"));
+
+  for(const occ of occupied){
+    const oy = occ.y;
+
+    // 同じ物件行の高さを少し広めに取る
+    const rowBand = items.filter(i => Math.abs(i.y - oy) <= 13);
+
+    // 管理番号：左端列。分割されている場合も連結する
+    const noItems = rowBand
+      .filter(i => inCol(i.x,pageWidth,col.no))
+      .filter(i => /\d/.test(i.text))
+      .sort((a,b) => a.x-b.x);
+
+    let number = noItems.map(i => i.text.replace(/\D/g,"")).join("");
+    const ten = number.match(/\d{10}/);
+    number = ten ? ten[0] : "";
+
+    // 物件名：物件名列だけを対象。駅名や賃料は別列なので混ざらない
+    let nameItems = items
+      .filter(i => inCol(i.x,pageWidth,col.name))
+      .filter(i => Math.abs(i.y - oy) <= 14)
+      .filter(i => !/^(一般|専任|専属|媒介)$/.test(i.text));
+
+    // yで上段→下段、同段はx順
+    nameItems.sort((a,b) => {
+      if(Math.abs(a.y-b.y) > 2) return a.y-b.y;
+      return a.x-b.x;
+    });
+
+    let property = nameItems.map(i => i.text).join("")
+      .replace(/\s+/g,"")
+      .trim();
+
+    // 号数列。階数表記の数字と分離するため、yごとに候補化
+    const roomItems = items
+      .filter(i => inCol(i.x,pageWidth,col.room))
+      .filter(i => Math.abs(i.y - oy) <= 12)
+      .filter(i => /^[A-Za-z0-9]+$/.test(i.text));
+
+    const groups = groupByY(roomItems, 2.2)
+      .map(g => g.sort((a,b)=>a.x-b.x).map(i=>i.text).join(""))
+      .filter(s => /^[A-Za-z]?\d{2,4}$/.test(s))
+      .sort((a,b) => b.length-a.length);
+
+    const room = groups[0] || "";
+
+    if(number && property && room){
+      out.push({number, property, room});
+    }
+  }
+
+  return out;
+}
+
+function groupByY(items, tolerance){
+  const groups = [];
+  for(const item of items.sort((a,b)=>a.y-b.y)){
+    let g = groups.find(gr => Math.abs(gr[0].y - item.y) <= tolerance);
+    if(!g){ g=[]; groups.push(g); }
+    g.push(item);
+  }
+  return groups;
+}
+
+function inCol(x,width,range){
+  const r = x/width;
+  return r >= range[0] && r < range[1];
+}
+
+function normalize(s){
+  return String(s||"").replace(/\s+/g,"");
+}
+
+function dedupe(list){
+  const map = new Map();
+  for(const r of list){
+    const key = `${r.number}|${r.room}`;
+    if(!map.has(key)) map.set(key,r);
+  }
+  return [...map.values()];
+}
+
+function render(){
+  countEl.textContent = rows.length;
+  const d = new Date();
+  printMetaEl.textContent =
+    `作成日：${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}　件数：${rows.length}件`;
+
+  if(!rows.length){
+    bodyEl.innerHTML = `<tr><td colspan="5" class="empty">PDFを選択してください</td></tr>`;
+    return;
+  }
+
+  bodyEl.innerHTML = "";
+  rows.forEach((r,idx)=>{
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${esc(r.number)}</td>
+      <td>${esc(r.property)}</td>
+      <td>${esc(r.room)}</td>
+      <td><button class="copy-btn number-copy" type="button" data-index="${idx}" data-kind="number">📋 管理番号</button></td>
+      <td><button class="copy-btn name-copy" type="button" data-index="${idx}" data-kind="property">📋 物件名</button></td>
+    `;
+    bodyEl.appendChild(tr);
+  });
+
+  document.querySelectorAll(".copy-btn").forEach(btn=>{
+    btn.addEventListener("click",async(e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+
+      const r = rows[Number(btn.dataset.index)];
+      if(!r) return;
+
+      const kind = btn.dataset.kind;
+      const text = kind === "property" ? String(r.property) : String(r.number);
+      const original = btn.textContent;
+      btn.disabled = true;
+
+      try{
+        await copyText(text);
+        btn.textContent = "✓ コピーしました";
+        btn.classList.add("copied");
+
+        // コピー済みはボタン表示だけで残す
+      }catch(err){
+        console.error(err);
+        btn.textContent = original;
+        btn.disabled = false;
+        window.prompt("この内容をコピーしてください", text);
+      }
+    });
+  });
+}
+
+async function copyText(text){
+  // GitHub Pages(HTTPS)などではClipboard APIを優先
+  if(navigator.clipboard && window.isSecureContext){
+    try{
+      await navigator.clipboard.writeText(text);
+      return true;
+    }catch(e){
+      console.warn("Clipboard API fallback:", e);
+    }
+  }
+
+  // ローカルHTMLや一部ブラウザ用フォールバック
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  ta.style.top = "0";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+
+  ta.focus();
+  ta.select();
+  ta.setSelectionRange(0, ta.value.length);
+
+  let ok = false;
+  try{
+    ok = document.execCommand("copy");
+  }catch(e){
+    ok = false;
+  }
+  ta.remove();
+
+  if(!ok){
+    // 最終手段：番号を選択できるダイアログを表示
+    window.prompt("この管理番号をコピーしてください", text);
+  }
+  return ok;
+}
+
+function setStatus(t,err=false){
+  statusEl.textContent=t;
+  statusEl.className=err?"error":"";
+}
+
+function esc(s){
+  return String(s)
+    .replaceAll("&","&amp;").replaceAll("<","&lt;")
+    .replaceAll(">","&gt;").replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+
+document.getElementById("pdfModeBtn").addEventListener("click",()=>{
+  if(!rows.length){
+    alert("先にPDFを読み込んでください。");
+    return;
+  }
+
+  buildPrintReport();
+
+  document.body.classList.add("pdf-mode");
+  window.scrollTo(0,0);
+});
+
+function buildPrintReport(){
+  const tbody = document.getElementById("printOnlyBody");
+  const meta = document.getElementById("printOnlyMeta");
+  tbody.innerHTML = "";
+
+  const screenRows = [...document.querySelectorAll("#resultBody tr")];
+
+  rows.forEach((r, idx)=>{
+    const screenRow = screenRows[idx];
+    const buttons = screenRow ? [...screenRow.querySelectorAll(".copy-btn")] : [];
+
+    const numberDone = buttons[0]?.classList.contains("copied") ? "✓ コピーしました" : "未処理";
+    const nameDone = buttons[1]?.classList.contains("copied") ? "✓ コピーしました" : "未処理";
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${esc(r.number)}</td>
+      <td>${esc(r.property)}</td>
+      <td>${esc(r.room)}</td>
+      <td style="text-align:center">${numberDone}</td>
+      <td style="text-align:center">${nameDone}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const d = new Date();
+  meta.textContent =
+    `作成日：${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,"0")}/${String(d.getDate()).padStart(2,"0")}　件数：${rows.length}件`;
+}
+
+document.getElementById("pdfBackBtn").addEventListener("click",()=>{
+  document.body.classList.remove("pdf-mode");
+  window.scrollTo(0,0);
+});
+
+document.getElementById("clearBtn").addEventListener("click",()=>{
+  fileInput.value="";
+  filenameEl.textContent="PDF未選択";
+  statusEl.textContent="";
+  rows=[];
+  render();
+});
+</script>
+
+<div id="printOnlyReport" class="print-only-report">
+  <h2>ARNet 居住中物件一覧</h2>
+  <div id="printOnlyMeta" class="print-only-meta"></div>
+  <table class="print-only-table">
+    <thead>
+      <tr>
+        <th>管理番号</th>
+        <th>物件名</th>
+        <th>号数</th>
+        <th>管理番号コピー</th>
+        <th>物件名コピー</th>
+      </tr>
+    </thead>
+    <tbody id="printOnlyBody"></tbody>
+  </table>
+</div>
+
+</body>
+</html>
